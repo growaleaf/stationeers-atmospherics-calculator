@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stationeers — Atmospherics Gas-Mix Calculator</title>
+<meta name="description" content="Enter your room or suit volume, target pressure, and gas mix for Stationeers and get the moles (and STP-liter equivalent) of each gas to release. Ideal-gas-law constant and oxygen safety bands are cited to two independent sources; anything not corroborated twice is a field you read off your own in-game analyzer instead.">
+<style>
+  :root {
+    --bg: #0c1317;
+    --panel: #121b20;
+    --panel-border: #2a3b42;
+    --ink: #dce9ec;
+    --ink-dim: #8aa0a6;
+    --accent: #2f9bab;
+    --accent-bright: #5fd0dd;
+    --warn: #d98f3c;
+    --warn-bright: #f0ad5c;
+    --field-bg: #0a1013;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.55;
+  }
+  main {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 32px 20px 80px;
+  }
+  h1 {
+    font-size: 1.5rem;
+    margin: 0 0 4px;
+    border-bottom: 1px solid var(--panel-border);
+    padding-bottom: 16px;
+  }
+  .sub {
+    color: var(--ink-dim);
+    font-size: 0.95rem;
+    margin: 0 0 28px;
+  }
+  .sub a { color: var(--accent-bright); }
+  section {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    padding: 20px 22px;
+    margin-bottom: 20px;
+  }
+  section h2 {
+    font-size: 1.15rem;
+    margin: 0 0 6px;
+  }
+  .section-note {
+    color: var(--ink-dim);
+    font-size: 0.85rem;
+    margin: 0 0 16px;
+  }
+  .ref-box {
+    background: rgba(47, 155, 171, 0.1);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    padding: 10px 14px;
+    font-size: 0.85rem;
+    margin: 0 0 16px;
+  }
+  .ref-box.input-box {
+    background: rgba(217, 143, 60, 0.1);
+    border-color: var(--warn);
+  }
+  .ref-box .ref-label {
+    color: var(--accent-bright);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.72rem;
+    letter-spacing: 0.03em;
+    display: block;
+    margin-bottom: 4px;
+  }
+  .ref-box.input-box .ref-label { color: var(--warn-bright); }
+  .field-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 14px;
+    margin-bottom: 14px;
+  }
+  .field {
+    display: flex;
+    flex-direction: column;
+  }
+  label.field-label {
+    font-size: 0.85rem;
+    color: var(--ink-dim);
+    margin-bottom: 6px;
+  }
+  input[type="number"] {
+    width: 100%;
+    background: var(--field-bg);
+    color: var(--ink);
+    border: 1px solid var(--panel-border);
+    border-radius: 4px;
+    padding: 9px 10px;
+    font-size: 1rem;
+  }
+  input[type="number"]:focus {
+    outline: 1px solid var(--accent);
+  }
+  .preset-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  button.preset {
+    background: var(--field-bg);
+    color: var(--accent-bright);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    padding: 8px 14px;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  button.preset:hover { background: rgba(47, 155, 171, 0.15); }
+  .mix-total {
+    font-size: 0.82rem;
+    color: var(--ink-dim);
+    margin: -4px 0 14px;
+  }
+  .mix-total.off { color: var(--warn-bright); }
+  .output-box {
+    border-top: 1px solid var(--panel-border);
+    margin-top: 6px;
+    padding-top: 14px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+  }
+  .output-cell {
+    background: var(--field-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 4px;
+    padding: 10px 12px;
+  }
+  .output-cell .output-label {
+    font-size: 0.78rem;
+    color: var(--ink-dim);
+    display: block;
+    margin-bottom: 3px;
+  }
+  .output-cell .output-value {
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--accent-bright);
+  }
+  table.gastable, table.compare, table.verify {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+    margin-top: 10px;
+  }
+  table.gastable th, table.gastable td,
+  table.compare th, table.compare td,
+  table.verify th, table.verify td {
+    border: 1px solid var(--panel-border);
+    padding: 7px 9px;
+    text-align: left;
+  }
+  table.gastable th, table.compare th, table.verify th {
+    color: var(--ink-dim);
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+  table.gastable td.num, table.compare td.num, table.verify td.num {
+    font-weight: 600;
+    color: var(--accent-bright);
+  }
+  table.gastable input[type="number"] {
+    padding: 5px 7px;
+    font-size: 0.9rem;
+  }
+  .band-safe { color: #6fcf7a; font-weight: 600; }
+  .band-low { color: var(--warn-bright); font-weight: 600; }
+  .band-critical { color: #e2645a; font-weight: 600; }
+  .band-unknown { color: var(--ink-dim); }
+  .pass { color: #6fcf7a; font-weight: 600; }
+  .fail { color: #e2645a; font-weight: 700; }
+  .sources-section {
+    font-size: 0.82rem;
+    color: var(--ink-dim);
+  }
+  .sources-section h2 { font-size: 1.05rem; }
+  .sources-section ol { margin: 6px 0 16px; padding-left: 22px; }
+  .sources-section li { margin-bottom: 8px; }
+  .sources-section a { color: var(--accent-bright); }
+  .sources-section .verified { color: var(--ink); font-weight: 600; }
+  code { background: var(--field-bg); padding: 1px 5px; border-radius: 3px; }
+  footer {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 0 20px 40px;
+    font-size: 0.8rem;
+    color: var(--ink-dim);
+  }
+  footer a { color: var(--accent-bright); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Stationeers — Atmospherics Gas-Mix Calculator</h1>
+  <p class="sub">Enter your room or suit volume, target pressure, and temperature for
+  <a href="https://store.steampowered.com/app/544550" target="_blank" rel="noopener">Stationeers</a>,
+  set a gas mix, and get the moles — and the STP-liter equivalent — of each gas needed to reach it.
+  The ideal-gas-law constant and the oxygen breathing bands below are each confirmed against two
+  independently fetched sources. Pollutant and volatile exposure limits are <strong>not</strong>
+  built in as defaults — the only number either had was single-sourced, so those are fields you read
+  off your own in-game atmospherics analyzer. Nothing here is saved or sent anywhere; the math runs
+  in your browser.</p>
+
+  <section>
+    <h2>Target atmosphere</h2>
+    <div class="ref-box">
+      <span class="ref-label">Corroborated — ideal gas law</span>
+      Stationeers models gas as <code>P·V = n·R·T</code> with
+      <code>R = 8314.46261815324</code> (liter-pascals per mole-kelvin). Confirmed against the
+      atmospherics wiki's own worked furnace example (2 mol, 300 K, 1000 L → ≈5 kPa — reproduced
+      exactly below) and independently against a third-party Stationeers gas-mixer calculator that
+      uses the same constant in J/(mol·K) units. See Sources [1][2].
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label class="field-label" for="vol">Volume (L) — room or suit/pipe network</label>
+        <input type="number" id="vol" min="0" step="1" value="2500">
+      </div>
+      <div class="field">
+        <label class="field-label" for="pressure">Target pressure (kPa)</label>
+        <input type="number" id="pressure" min="0" step="1" value="100">
+      </div>
+      <div class="field">
+        <label class="field-label" for="temp">Temperature (K)</label>
+        <input type="number" id="temp" min="1" step="1" value="293">
+      </div>
+    </div>
+
+    <p class="section-note">Presets fill the mix below. "Breathable" is one common player ratio, not
+    the one official mix — sources disagree (75/25, 80/20, and 78/20/2 N2/O2/CO2 all turn up from
+    independent guides), because what actually matters in-game is the resulting O2 <em>partial</em>
+    pressure, not the percentage. "Welding bypass" works by zeroing oxygen entirely — no oxidizer
+    present means no combustion is possible, regardless of volatiles percentage, so it does not rely
+    on any single-sourced ignition threshold.</p>
+    <div class="preset-row">
+      <button class="preset" id="presetBreathable" type="button">Breathable (common 21/78/1 O2/N2/CO2)</button>
+      <button class="preset" id="presetPollutant" type="button">Pollutant purge (same mix, pollutant forced to 0%)</button>
+      <button class="preset" id="presetWelding" type="button">Welding bypass (0% O2, 100% N2 purge)</button>
+    </div>
+
+    <table class="gastable">
+      <thead>
+        <tr><th>Gas</th><th>Mix fraction (%)</th><th>Moles</th><th>STP-equivalent (L)</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Oxygen (O2)</td>
+          <td><input type="number" id="fracO2" min="0" max="100" step="0.1" value="21"></td>
+          <td class="num" id="molO2">—</td>
+          <td class="num" id="stpO2">—</td>
+        </tr>
+        <tr>
+          <td>Nitrogen (N2)</td>
+          <td><input type="number" id="fracN2" min="0" max="100" step="0.1" value="78"></td>
+          <td class="num" id="molN2">—</td>
+          <td class="num" id="stpN2">—</td>
+        </tr>
+        <tr>
+          <td>Carbon Dioxide (CO2)</td>
+          <td><input type="number" id="fracCO2" min="0" max="100" step="0.1" value="1"></td>
+          <td class="num" id="molCO2">—</td>
+          <td class="num" id="stpCO2">—</td>
+        </tr>
+        <tr>
+          <td>Pollutant (X)</td>
+          <td><input type="number" id="fracPollutant" min="0" max="100" step="0.1" value="0"></td>
+          <td class="num" id="molPollutant">—</td>
+          <td class="num" id="stpPollutant">—</td>
+        </tr>
+        <tr>
+          <td>Volatiles</td>
+          <td><input type="number" id="fracVolatiles" min="0" max="100" step="0.1" value="0"></td>
+          <td class="num" id="molVolatiles">—</td>
+          <td class="num" id="stpVolatiles">—</td>
+        </tr>
+        <tr>
+          <td>Nitrous Oxide (N2O)</td>
+          <td><input type="number" id="fracN2O" min="0" max="100" step="0.1" value="0"></td>
+          <td class="num" id="molN2O">—</td>
+          <td class="num" id="stpN2O">—</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="mix-total" id="mixTotal">Mix total: 100.0%</p>
+
+    <div class="output-box">
+      <div class="output-cell">
+        <span class="output-label">Total moles needed</span>
+        <span class="output-value" id="totalMoles">—</span>
+      </div>
+      <div class="output-cell">
+        <span class="output-label">O2 partial pressure</span>
+        <span class="output-value" id="o2Partial">—</span>
+      </div>
+      <div class="output-cell">
+        <span class="output-label">O2 breathing band (in-game, see Safety reference)</span>
+        <span class="output-value" id="o2Band">—</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Safety reference — not used to gate the calculator above</h2>
+    <div class="ref-box">
+      <span class="ref-label">Corroborated — O2 breathing floor</span>
+      16 kPa or higher O2 partial pressure is the in-game breathable floor with no lung warning.
+      Confirmed independently by the atmospherics wiki's own Air page and a separate community
+      atmospherics guide. See Sources [3][4].
+    </div>
+    <div class="ref-box">
+      <span class="ref-label">Single-sourced, shown for reference only — not corroborated twice</span>
+      The wiki's Air page further splits 16→12 kPa O2 as a LOW warning (no damage) and 12→5 kPa as
+      CRITICAL (no damage below that either, per the same page) — this exact split only appears on
+      that one wiki, so it is labeled rather than claimed as double-confirmed. See Source [3].
+      The same wiki's EVA Suit page separately states a 10 L suit volume and a 202.65 kPa suit
+      pressure limit — also single-sourced. See Source [5].
+    </div>
+    <div class="ref-box input-box">
+      <span class="ref-label">Not corroborated — read this off your own analyzer</span>
+      Pollutant: the only number found anywhere (the wiki's own Pollutant page, mirrored across
+      that wiki's own domains — one source, not two) states a 0.1 mol concentration triggers a
+      suit poison warning. That is not shipped as a built-in default here. See Source [6].
+      Volatiles: the only number found is a single Steam Community discussion claiming atmospheres
+      ignite once combined O2 and volatiles both exceed roughly 5% — not wiki-confirmed, not used
+      as a default. See Source [7]. For both, use your suit or base analyzer's live reading rather
+      than a number on this page.
+    </div>
+  </section>
+
+  <section>
+    <h2>Formulas &amp; known-answer checks</h2>
+    <p class="section-note">
+      <code>n_total = (P[kPa]·1000)·V[L] / (R·T[K])</code>, then
+      <code>n_gas = n_total · fraction_gas</code>. STP-equivalent liters use IUPAC STP
+      (273.15 K, 100 kPa), derived from the same R rather than a separate hardcoded molar volume:
+      <code>V_STP = n_gas · R · 273.15 / 100000</code>.
+    </p>
+    <p class="section-note">Each row below was hand-calculated independently, then checked against
+    this page's own live functions at load time. "Pass" means the two matched to within 0.001%.</p>
+    <table class="verify" id="verifyTable">
+      <thead>
+        <tr><th>Case</th><th>Hand-calculated</th><th>This tool's output</th><th>Result</th></tr>
+      </thead>
+      <tbody id="verifyBody"></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>How this differs from existing Stationeers tools</h2>
+    <p class="section-note">
+    <strong>stationeersfurnace.com</strong> covers furnace/smelting recipes only — no life-support
+    mixing. <strong>stationeers-wiki.com</strong> is a reference wiki with recipe and property pages,
+    not an interactive calculator. A third tool found during this build,
+    <strong>a Stationeers gas-mixer calculator</strong> (hosted at supercraft.host), solves the ideal
+    gas law and a volatiles/oxygen <em>fuel combustion</em> ratio for engines — it has no breathable-
+    atmosphere presets, no multi-gas life-support mix, and no safety-band reference info at all.
+    This page is scoped to the different mechanic: mixing a room or suit atmosphere a colonist can
+    breathe, not fuel for an engine or a furnace recipe.</p>
+  </section>
+
+  <section class="sources-section">
+    <h2>Sources &amp; last verified date</h2>
+    <p class="verified">All citations below fetched directly 2026-10-08.</p>
+    <ol>
+      <li id="src1"><a href="https://stationeers-wiki.com/Pressure,_Volume,_Quantity,_and_Temperature" target="_blank" rel="noopener">stationeers-wiki.com — Pressure, Volume, Quantity, and Temperature</a>:
+      "P * V = n * R * T", R = "8314.46261815324" "(Lit * Pa)/(mol * deg K)", with a worked furnace
+      example (2 mol, 300 K, 1000 L) solving to "≈5 kPa" — reproduced exactly in the Formulas
+      section above.</li>
+      <li id="src2"><a href="https://tools.supercraft.host/tools/stationeers-gas-mixer-calculator" target="_blank" rel="noopener">supercraft.host — Stationeers Gas Mixer Calculator</a>:
+      an independently built third-party calculator for the same game, whose ideal-gas-law panel
+      uses "R = 8.314" (J/(mol·K)) — the same constant this page uses, in base SI units rather than
+      liter-pascal units.</li>
+      <li id="src3"><a href="https://stationeers-wiki.com/Air" target="_blank" rel="noopener">stationeers-wiki.com — Air</a>:
+      "16 kPa or higher" O2 partial pressure is safe to breathe with no lung warning; "16 kPa to
+      12 kPa" gives an OXYGEN LOW warning; "12 kPa to 5 kPa" gives OXYGEN CRITICAL, in both cases
+      with no damage stated on this page.</li>
+      <li id="src4"><a href="https://xgamingserver.com/blog/stationeers-atmospherics-guide-pressure-oxygen/" target="_blank" rel="noopener">xgamingserver.com — Stationeers Atmospherics 101</a>:
+      independently states players need "at least ~16 kPa O2" to remove a helmet without lung
+      warnings, matching the wiki's 16 kPa floor without citing it.</li>
+      <li id="src5"><a href="https://stationeers-wiki.com/EVA_Suit" target="_blank" rel="noopener">stationeers-wiki.com — EVA Suit</a>:
+      states a 10 L suit volume and a 202.65 kPa maximum suit pressure. Single-sourced; shown for
+      reference only.</li>
+      <li id="src6"><a href="https://stationeers-wiki.com/Pollutant" target="_blank" rel="noopener">stationeers-wiki.com — Pollutant</a>:
+      "A concentration of 0.1 Mol or greater will cause your suit to warn about pollutants/poison in
+      the air." The same text is mirrored on this wiki's own legacy subdomain — one underlying
+      source, not two — so it is not shipped as a built-in default.</li>
+      <li id="src7"><a href="https://steamcommunity.com/app/544550/discussions/0/4365752248006269384/" target="_blank" rel="noopener">Steam Community discussion, Stationeers forum</a>:
+      states the atmosphere becomes explosive once both oxygen and volatiles exceed roughly 5% each,
+      and ignites at 300°C or from a welder. Single community source, not wiki-confirmed; not used
+      as a default — the welding-bypass preset above instead zeroes oxygen entirely, which needs no
+      threshold number to be correct.</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>Changelog</h2>
+    <p class="section-note">2026-10-08 — first version. Ideal-gas-law engine, three presets, O2
+    partial-pressure band reference, pollutant/volatile fields left as player-input per the only
+    source found for each being single-sourced.</p>
+  </section>
+</main>
+
+<footer>
+  Fan-made calculator, unaffiliated with the developers of Stationeers. This is a game companion
+  tool — "breathable," "in-game critical," and every other range above describe Stationeers'
+  in-game atmospherics model only, not a real-world safety claim. Figures reflect sources fetched
+  2026-10-08 and may not match every patch; verify against your own in-game analyzer before relying
+  on a number. No account, no server, no data leaves your browser.
+  <a href="https://github.com/growaleaf/stationeers-atmospherics-calculator" target="_blank" rel="noopener">Source</a>.
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  var R = 8314.46261815324;
+  var STP_T = 273.15;
+  var STP_P_PA = 100000;
+
+  var GASES = ["O2", "N2", "CO2", "Pollutant", "Volatiles", "N2O"];
+
+  function num(id) {
+    var el = document.getElementById(id);
+    var v = parseFloat(el.value);
+    return isNaN(v) ? 0 : v;
+  }
+
+  function fmt(v, digits) {
+    if (!isFinite(v)) return "—";
+    return v.toLocaleString("en-US", { maximumFractionDigits: digits === undefined ? 4 : digits, minimumFractionDigits: 0 });
+  }
+
+  // Core engine, shared by the live calculator and the verification table.
+  function computeMix(pressureKPa, volumeL, tempK, fractionsPercent) {
+    var nTotal = (pressureKPa * 1000 * volumeL) / (R * tempK);
+    var perGas = {};
+    GASES.forEach(function (g) {
+      var frac = (fractionsPercent[g] || 0) / 100;
+      var nGas = nTotal * frac;
+      var vStp = nGas * R * STP_T / STP_P_PA;
+      perGas[g] = { moles: nGas, stp: vStp };
+    });
+    return { total: nTotal, gases: perGas };
+  }
+
+  function o2Band(partialKPa) {
+    if (partialKPa >= 16) return { text: "In-game safe (≥16 kPa, no lung warning)", cls: "band-safe" };
+    if (partialKPa >= 12) return { text: "LOW warning (16→12 kPa)", cls: "band-low" };
+    if (partialKPa >= 5) return { text: "CRITICAL warning (12→5 kPa)", cls: "band-critical" };
+    return { text: "Below 5 kPa — outside the wiki's own stated bands", cls: "band-unknown" };
+  }
+
+  function readFractions() {
+    var f = {};
+    GASES.forEach(function (g) {
+      f[g] = num("frac" + g);
+    });
+    return f;
+  }
+
+  function recalc() {
+    var vol = num("vol"), pressure = num("pressure"), temp = num("temp");
+    var fractions = readFractions();
+
+    var total = GASES.reduce(function (s, g) { return s + (fractions[g] || 0); }, 0);
+    var totalEl = document.getElementById("mixTotal");
+    totalEl.textContent = "Mix total: " + fmt(total, 1) + "%";
+    totalEl.className = "mix-total" + (Math.abs(total - 100) > 0.05 ? " off" : "");
+
+    if (vol <= 0 || pressure <= 0 || temp <= 0) {
+      GASES.forEach(function (g) {
+        document.getElementById("mol" + g).textContent = "—";
+        document.getElementById("stp" + g).textContent = "—";
+      });
+      document.getElementById("totalMoles").textContent = "—";
+      document.getElementById("o2Partial").textContent = "—";
+      document.getElementById("o2Band").textContent = "—";
+      return;
+    }
+
+    var result = computeMix(pressure, vol, temp, fractions);
+    GASES.forEach(function (g) {
+      document.getElementById("mol" + g).textContent = fmt(result.gases[g].moles, 4) + " mol";
+      document.getElementById("stp" + g).textContent = fmt(result.gases[g].stp, 4) + " L";
+    });
+    document.getElementById("totalMoles").textContent = fmt(result.total, 4) + " mol";
+
+    var o2PartialKPa = pressure * (fractions.O2 / 100);
+    document.getElementById("o2Partial").textContent = fmt(o2PartialKPa, 3) + " kPa";
+    var band = o2Band(o2PartialKPa);
+    var bandEl = document.getElementById("o2Band");
+    bandEl.textContent = band.text;
+    bandEl.className = "output-value " + band.cls;
+  }
+
+  function setMix(vol, pressure, temp, fractions) {
+    document.getElementById("vol").value = vol;
+    document.getElementById("pressure").value = pressure;
+    document.getElementById("temp").value = temp;
+    GASES.forEach(function (g) {
+      document.getElementById("frac" + g).value = fractions[g] || 0;
+    });
+    recalc();
+  }
+
+  document.getElementById("presetBreathable").addEventListener("click", function () {
+    setMix(2500, 100, 293, { O2: 21, N2: 78, CO2: 1, Pollutant: 0, Volatiles: 0, N2O: 0 });
+  });
+  document.getElementById("presetPollutant").addEventListener("click", function () {
+    setMix(2500, 100, 293, { O2: 21, N2: 79, CO2: 0, Pollutant: 0, Volatiles: 0, N2O: 0 });
+  });
+  document.getElementById("presetWelding").addEventListener("click", function () {
+    setMix(2500, 100, 293, { O2: 0, N2: 100, CO2: 0, Pollutant: 0, Volatiles: 0, N2O: 0 });
+  });
+
+  ["vol", "pressure", "temp"].concat(GASES.map(function (g) { return "frac" + g; }))
+    .forEach(function (id) {
+      document.getElementById(id).addEventListener("input", recalc);
+    });
+
+  recalc();
+
+  // --- Known-answer verification, run against the same computeMix() used above ---
+  var CASES = [
+    {
+      name: "2500 L, 100 kPa, 293 K, 21% O2 / 79% N2",
+      pressure: 100, vol: 2500, temp: 293,
+      fractions: { O2: 21, N2: 79, CO2: 0, Pollutant: 0, Volatiles: 0, N2O: 0 },
+      expect: { total: 102.621463, O2: 21.550507, N2: 81.070956 }
+    },
+    {
+      name: "Wiki furnace check: 1000 L, 2 mol @ 300 K → pressure (via n·R·T/V)",
+      directPressureCheck: { n: 2, vol: 1000, temp: 300, expectKPa: 4.988678 }
+    },
+    {
+      name: "10 L suit, 50 kPa, 293 K, 100% O2",
+      pressure: 50, vol: 10, temp: 293,
+      fractions: { O2: 100, N2: 0, CO2: 0, Pollutant: 0, Volatiles: 0, N2O: 0 },
+      expect: { total: 0.205243, O2: 0.205243 }
+    },
+    {
+      name: "500 L, 150 kPa, 310 K, 20% O2 / 70% N2 / 10% CO2",
+      pressure: 150, vol: 500, temp: 310,
+      fractions: { O2: 20, N2: 70, CO2: 10, Pollutant: 0, Volatiles: 0, N2O: 0 },
+      expect: { total: 29.098150, O2: 5.819630, N2: 20.368705, CO2: 2.909815 }
+    }
+  ];
+
+  var verifyBody = document.getElementById("verifyBody");
+  CASES.forEach(function (c) {
+    var row = document.createElement("tr");
+    var handText, actualText, pass;
+
+    if (c.directPressureCheck) {
+      var d = c.directPressureCheck;
+      var pPa = d.n * R * d.temp / d.vol;
+      var pKPa = pPa / 1000;
+      handText = fmt(d.expectKPa, 4) + " kPa";
+      actualText = fmt(pKPa, 4) + " kPa";
+      pass = Math.abs(pKPa - d.expectKPa) / d.expectKPa < 1e-5;
+    } else {
+      var result = computeMix(c.pressure, c.vol, c.temp, c.fractions);
+      var handParts = ["total " + fmt(c.expect.total, 4)];
+      var actualParts = ["total " + fmt(result.total, 4)];
+      pass = Math.abs(result.total - c.expect.total) / c.expect.total < 1e-5;
+      Object.keys(c.expect).forEach(function (k) {
+        if (k === "total") return;
+        handParts.push(k + " " + fmt(c.expect[k], 4));
+        actualParts.push(k + " " + fmt(result.gases[k].moles, 4));
+        if (Math.abs(result.gases[k].moles - c.expect[k]) / c.expect[k] > 1e-5) pass = false;
+      });
+      handText = handParts.join(", ") + " mol";
+      actualText = actualParts.join(", ") + " mol";
+    }
+
+    var nameCell = document.createElement("td");
+    nameCell.textContent = c.name;
+    var handCell = document.createElement("td");
+    handCell.textContent = handText;
+    var actualCell = document.createElement("td");
+    actualCell.className = "num";
+    actualCell.textContent = actualText;
+    var resultCell = document.createElement("td");
+    resultCell.className = pass ? "pass" : "fail";
+    resultCell.textContent = pass ? "PASS" : "FAIL";
+
+    row.appendChild(nameCell);
+    row.appendChild(handCell);
+    row.appendChild(actualCell);
+    row.appendChild(resultCell);
+    verifyBody.appendChild(row);
+  });
+})();
+</script>
+</body>
+</html>
